@@ -1,38 +1,54 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useCallback } from "react";
 import { useDeck } from "@/hooks/useDeck";
+import { useBackgroundMusic } from "@/hooks/useBackgroundMusic";
 import { CardData } from "@/lib/cardData";
 import { MagicParticles } from "@/components/MagicParticles";
 import { DrawButton } from "@/components/DrawButton";
 import { CardReveal } from "@/components/CardReveal";
 import { VideoOverlay } from "@/components/VideoOverlay";
+import { DrawTransition } from "@/components/DrawTransition";
 import { ManageCardsModal } from "@/components/ManageCardsModal";
+import { MusicToggle } from "@/components/MusicToggle";
 import { Settings, Film } from "lucide-react";
 import bgNebula from "@/assets/bg-nebula.jpg";
 
 const Index = () => {
   const { cards, addCard, editCard, deleteCard, drawCard, videoUrl, setVideo } = useDeck();
+  const music = useBackgroundMusic();
+
   const [drawnCard, setDrawnCard] = useState<CardData | null>(null);
   const [showVideo, setShowVideo] = useState(false);
   const [showManage, setShowManage] = useState(false);
   const [pendingCard, setPendingCard] = useState<CardData | null>(null);
+  const [isTransitioning, setIsTransitioning] = useState(false);
   const videoInputRef = useRef<HTMLInputElement>(null);
 
   const handleDraw = () => {
     const card = drawCard();
     if (!card) return;
 
+    // Start cinematic transition
+    setPendingCard(card);
+    setIsTransitioning(true);
+    music.fadeOutAndPause();
+  };
+
+  const handleTransitionComplete = useCallback(() => {
+    setIsTransitioning(false);
     if (videoUrl) {
-      setPendingCard(card);
       setShowVideo(true);
     } else {
-      setDrawnCard(card);
+      setDrawnCard(pendingCard);
+      setPendingCard(null);
+      music.fadeInAndResume();
     }
-  };
+  }, [videoUrl, pendingCard, music]);
 
   const handleVideoEnd = () => {
     setShowVideo(false);
     setDrawnCard(pendingCard);
     setPendingCard(null);
+    music.fadeInAndResume();
   };
 
   const handleVideoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -73,7 +89,7 @@ const Index = () => {
       </div>
 
       {/* Bottom Controls */}
-      <div className="fixed bottom-6 left-0 right-0 flex justify-between px-6 z-10">
+      <div className="fixed bottom-6 left-0 right-0 flex justify-between items-end px-6 z-10">
         <button
           onClick={() => setShowManage(true)}
           className="flex items-center gap-2 px-4 py-2 rounded-lg border border-border text-muted-foreground font-body text-sm hover:text-foreground hover:border-gold transition-all bg-card/50 backdrop-blur-sm"
@@ -82,13 +98,17 @@ const Index = () => {
           <span className="hidden sm:inline">Gerenciar Cartas</span>
         </button>
 
-        <button
-          onClick={() => videoInputRef.current?.click()}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg border border-border text-muted-foreground font-body text-sm hover:text-foreground hover:border-gold transition-all bg-card/50 backdrop-blur-sm"
-        >
-          <Film size={16} />
-          <span className="hidden sm:inline">Alterar Vídeo</span>
-        </button>
+        <div className="flex items-center gap-3">
+          <MusicToggle isPlaying={music.isPlaying} onToggle={music.toggle} />
+
+          <button
+            onClick={() => videoInputRef.current?.click()}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg border border-border text-muted-foreground font-body text-sm hover:text-foreground hover:border-gold transition-all bg-card/50 backdrop-blur-sm"
+          >
+            <Film size={16} />
+            <span className="hidden sm:inline">Alterar Vídeo</span>
+          </button>
+        </div>
         <input
           ref={videoInputRef}
           type="file"
@@ -102,6 +122,9 @@ const Index = () => {
       <div className="relative z-10 mt-8">
         <p className="font-body text-sm text-muted-foreground">{cards.length} cartas no baralho</p>
       </div>
+
+      {/* Cinematic transition */}
+      <DrawTransition active={isTransitioning} onComplete={handleTransitionComplete} />
 
       {/* Modals */}
       {showVideo && videoUrl && (
